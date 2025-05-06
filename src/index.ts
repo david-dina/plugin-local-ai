@@ -26,6 +26,7 @@ import { TokenizerManager } from './utils/tokenizerManager';
 import { TranscribeManager } from './utils/transcribeManager';
 import { TTSManager } from './utils/ttsManager';
 import { VisionManager } from './utils/visionManager';
+import { basename } from 'path';
 
 // Words to punish in LLM responses
 /**
@@ -143,41 +144,80 @@ class LocalAIManager {
    * Model paths are set after environment initialization.
    */
   private constructor() {
-    // Set up models directory consistently, similar to cacheDir
-    const modelsDir = path.join(os.homedir(), '.eliza', 'models');
+    this.config = validateConfig();
 
-    // Ensure models directory exists
-    if (!fs.existsSync(modelsDir)) {
-      fs.mkdirSync(modelsDir, { recursive: true });
-      logger.debug('Created models directory');
-    }
-    this.modelsDir = modelsDir;
-
-    // Set up cache directory
-    const cacheDirEnv = process.env.CACHE_DIR?.trim();
-    if (cacheDirEnv) {
-      this.cacheDir = path.resolve(cacheDirEnv);
-    } else {
-      const cacheDir = path.join(os.homedir(), '.eliza', 'cache');
-      // Ensure cache directory exists
-      if (!fs.existsSync(cacheDir)) {
-        fs.mkdirSync(cacheDir, { recursive: true });
-        logger.debug('Ensuring cache directory exists:', cacheDir);
-      }
-      this.cacheDir = cacheDir;
-    }
+    this._setupModelsDir();
+    this._setupCacheDir();
 
     // Initialize managers
     this.downloadManager = DownloadManager.getInstance(this.cacheDir, this.modelsDir);
     this.tokenizerManager = TokenizerManager.getInstance(this.cacheDir, this.modelsDir);
     this.visionManager = VisionManager.getInstance(this.cacheDir);
     this.transcribeManager = TranscribeManager.getInstance(this.cacheDir);
-    this.ttsManager = TTSManager.getInstance(this.cacheDir);
 
     // Initialize active model config (default)
     this.activeModelConfig = MODEL_SPECS.small;
     // Initialize embedding model config (spec details)
     this.embeddingModelConfig = MODEL_SPECS.embedding;
+  }
+
+  /**
+   * Sets up the models directory, reading from config or environment variables,
+   * and ensures the directory exists.
+   */
+  private _setupModelsDir(): void {
+    // Set up models directory consistently, similar to cacheDir
+    const modelsDirEnv = this.config?.MODELS_DIR?.trim() || process.env.MODELS_DIR?.trim();
+    if (modelsDirEnv) {
+      this.modelsDir = path.resolve(modelsDirEnv);
+      logger.info('Using models directory from MODELS_DIR environment variable:', this.modelsDir);
+    } else {
+      this.modelsDir = path.join(os.homedir(), '.eliza', 'models');
+      logger.info(
+        'MODELS_DIR environment variable not set, using default models directory:',
+        this.modelsDir
+      );
+    }
+
+    // Ensure models directory exists
+    if (!fs.existsSync(this.modelsDir)) {
+      fs.mkdirSync(this.modelsDir, { recursive: true });
+      logger.debug('Ensured models directory exists (created):', this.modelsDir);
+    } else {
+      logger.debug('Models directory already exists:', this.modelsDir);
+    }
+  }
+
+  /**
+   * Sets up the cache directory, reading from config or environment variables,
+   * and ensures the directory exists.
+   */
+  private _setupCacheDir(): void {
+    // Set up cache directory
+    const cacheDirEnv = this.config?.CACHE_DIR?.trim() || process.env.CACHE_DIR?.trim();
+    if (cacheDirEnv) {
+      this.cacheDir = path.resolve(cacheDirEnv);
+      logger.info('Using cache directory from CACHE_DIR environment variable:', this.cacheDir);
+    } else {
+      const cacheDir = path.join(os.homedir(), '.eliza', 'cache');
+      // Ensure cache directory exists
+      if (!fs.existsSync(cacheDir)) {
+        fs.mkdirSync(cacheDir, { recursive: true });
+        logger.debug('Ensuring cache directory exists (created):', cacheDir);
+      }
+      this.cacheDir = cacheDir;
+      logger.info(
+        'CACHE_DIR environment variable not set, using default cache directory:',
+        this.cacheDir
+      );
+    }
+    // Ensure cache directory exists if specified via env var but not yet created
+    if (!fs.existsSync(this.cacheDir)) {
+      fs.mkdirSync(this.cacheDir, { recursive: true });
+      logger.debug('Ensured cache directory exists (created):', this.cacheDir);
+    } else {
+      logger.debug('Cache directory already exists:', this.cacheDir);
+    }
   }
 
   /**
@@ -209,17 +249,22 @@ class LocalAIManager {
       try {
         logger.info('Initializing environment configuration...');
 
-        // Validate configuration (reads from process.env)
-        this.config = await validateConfig();
+        // Configuration is already validated and set in the constructor.
+        // We just need to ensure this.config is not null before proceeding.
+        if (!this.config) {
+          // This case should ideally not happen if constructor logic is sound.
+          logger.error('Config not available during environment initialization.');
+          throw new Error('Configuration not initialized');
+        }
 
         // Set model paths based on validated config
         this.modelPath = path.join(this.modelsDir, this.config.LOCAL_SMALL_MODEL);
         this.mediumModelPath = path.join(this.modelsDir, this.config.LOCAL_LARGE_MODEL);
         this.embeddingModelPath = path.join(this.modelsDir, this.config.LOCAL_EMBEDDING_MODEL); // Set embedding path
 
-        logger.info('Using small model path:', this.modelPath);
-        logger.info('Using medium model path:', this.mediumModelPath);
-        logger.info('Using embedding model path:', this.embeddingModelPath);
+        logger.info('Using small model path:', basename(this.modelPath));
+        logger.info('Using medium model path:', basename(this.mediumModelPath));
+        logger.info('Using embedding model path:', basename(this.embeddingModelPath));
 
         logger.info('Environment configuration validated and model paths set');
 
@@ -412,8 +457,8 @@ class LocalAIManager {
       });
 
       // Return zero vector with correct dimensions as fallback
-      const zeroDimensions = process.env.LOCAL_EMBEDDING_DIMENSIONS
-        ? parseInt(process.env.LOCAL_EMBEDDING_DIMENSIONS, 10)
+      const zeroDimensions = this.config?.LOCAL_EMBEDDING_DIMENSIONS // Use validated config
+        ? this.config.LOCAL_EMBEDDING_DIMENSIONS
         : this.embeddingModelConfig.dimensions;
 
       return new Array(zeroDimensions).fill(0);
