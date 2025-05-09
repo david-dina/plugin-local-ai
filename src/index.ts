@@ -146,19 +146,27 @@ class LocalAIManager {
   private constructor() {
     this.config = validateConfig();
 
-    this._setupModelsDir();
     this._setupCacheDir();
-
-    // Initialize managers
-    this.downloadManager = DownloadManager.getInstance(this.cacheDir, this.modelsDir);
-    this.tokenizerManager = TokenizerManager.getInstance(this.cacheDir, this.modelsDir);
-    this.visionManager = VisionManager.getInstance(this.cacheDir);
-    this.transcribeManager = TranscribeManager.getInstance(this.cacheDir);
 
     // Initialize active model config (default)
     this.activeModelConfig = MODEL_SPECS.small;
     // Initialize embedding model config (spec details)
     this.embeddingModelConfig = MODEL_SPECS.embedding;
+  }
+
+  /**
+   * Post-validation initialization steps that require config to be set.
+   * Called after config validation in initializeEnvironment.
+   */
+  private _postValidateInit(): void {
+    this._setupModelsDir();
+
+    // Initialize managers that depend on modelsDir
+    this.downloadManager = DownloadManager.getInstance(this.cacheDir, this.modelsDir);
+    this.tokenizerManager = TokenizerManager.getInstance(this.cacheDir, this.modelsDir);
+    this.visionManager = VisionManager.getInstance(this.cacheDir);
+    this.transcribeManager = TranscribeManager.getInstance(this.cacheDir);
+    this.ttsManager = TTSManager.getInstance(this.cacheDir);
   }
 
   /**
@@ -249,13 +257,11 @@ class LocalAIManager {
       try {
         logger.info('Initializing environment configuration...');
 
-        // Configuration is already validated and set in the constructor.
-        // We just need to ensure this.config is not null before proceeding.
-        if (!this.config) {
-          // This case should ideally not happen if constructor logic is sound.
-          logger.error('Config not available during environment initialization.');
-          throw new Error('Configuration not initialized');
-        }
+        // Re-validate config to ensure it's up to date
+        this.config = await validateConfig();
+
+        // Initialize components that depend on validated config
+        this._postValidateInit();
 
         // Set model paths based on validated config
         this.modelPath = path.join(this.modelsDir, this.config.LOCAL_SMALL_MODEL);
@@ -839,10 +845,33 @@ class LocalAIManager {
     if (!this.transcriptionInitializingPromise) {
       this.transcriptionInitializingPromise = (async () => {
         try {
-          // Initialize transcription model directly
-          // Use existing initialization code from the file
-          // ...
+          // Ensure environment is initialized first
+          await this.initializeEnvironment();
+
+          // Initialize TranscribeManager if not already done
+          if (!this.transcribeManager) {
+            this.transcribeManager = TranscribeManager.getInstance(this.cacheDir);
+          }
+
+          // Ensure FFmpeg is available
+          const ffmpegReady = await this.transcribeManager.ensureFFmpeg();
+          if (!ffmpegReady) {
+            // FFmpeg is not available, log instructions and throw
+            // The TranscribeManager's ensureFFmpeg or initializeFFmpeg would have already logged instructions.
+            logger.error(
+              'FFmpeg is not available or not configured correctly. Cannot proceed with transcription.'
+            );
+            // No need to call logFFmpegInstallInstructions here as ensureFFmpeg/initializeFFmpeg already does.
+            throw new Error(
+              'FFmpeg is required for transcription but is not available. Please see server logs for installation instructions.'
+            );
+          }
+
+          // Proceed with transcription model initialization if FFmpeg is ready
+          // (Assuming TranscribeManager handles its own specific model init if any,
+          // or that nodewhisper handles it internally)
           this.transcriptionInitialized = true;
+          logger.info('Transcription prerequisites (FFmpeg) checked and ready.');
           logger.info('Transcription model initialized successfully');
         } catch (error) {
           logger.error('Failed to initialize transcription model:', error);
@@ -866,12 +895,16 @@ class LocalAIManager {
         try {
           // Initialize TTS model directly
           // Use existing initialization code from the file
-          // ...
+          // Get the TTSManager instance (ensure environment is initialized for cacheDir)
+          await this.initializeEnvironment();
+          this.ttsManager = TTSManager.getInstance(this.cacheDir);
+          // Note: The internal pipeline initialization within TTSManager happens
+          // when generateSpeech calls its own initialize method.
           this.ttsInitialized = true;
           logger.info('TTS model initialized successfully');
         } catch (error) {
-          logger.error('Failed to initialize TTS model:', error);
-          this.ttsInitializingPromise = null;
+          logger.error('Failed to lazy initialize TTS components:', error);
+          this.ttsInitializingPromise = null; // Allow retry
           throw error;
         }
       })();

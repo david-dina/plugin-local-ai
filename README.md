@@ -7,7 +7,7 @@ This plugin provides local AI model capabilities through the ElizaOS platform, s
 Add the plugin to your character configuration:
 
 ```json
-"plugins": ["@elizaos/plugin-local-ai"]
+"plugins": ["@elizaos-plugins/plugin-local-ai"]
 ```
 
 ## Configuration
