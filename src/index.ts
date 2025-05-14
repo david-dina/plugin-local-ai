@@ -1,14 +1,19 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { Readable } from 'node:stream';
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { Readable } from "node:stream";
 import type {
   GenerateTextParams,
   ModelTypeName,
   TextEmbeddingParams,
   ObjectGenerationParams,
-} from '@elizaos/core';
-import { type IAgentRuntime, ModelType, type Plugin, logger } from '@elizaos/core';
+} from "@elizaos/core";
+import {
+  type IAgentRuntime,
+  ModelType,
+  type Plugin,
+  logger,
+} from "@elizaos/core";
 import {
   type Llama,
   LlamaChatSession,
@@ -17,16 +22,16 @@ import {
   LlamaEmbeddingContext,
   type LlamaModel,
   getLlama,
-} from 'node-llama-cpp';
-import { validateConfig, type Config } from './environment';
-import { MODEL_SPECS, type ModelSpec, type EmbeddingModelSpec } from './types';
-import { DownloadManager } from './utils/downloadManager';
-import { getPlatformManager } from './utils/platform';
-import { TokenizerManager } from './utils/tokenizerManager';
-import { TranscribeManager } from './utils/transcribeManager';
-import { TTSManager } from './utils/ttsManager';
-import { VisionManager } from './utils/visionManager';
-import { basename } from 'path';
+} from "node-llama-cpp";
+import { validateConfig, type Config } from "./environment";
+import { MODEL_SPECS, type ModelSpec, type EmbeddingModelSpec } from "./types";
+import { DownloadManager } from "./utils/downloadManager";
+import { getPlatformManager } from "./utils/platform";
+import { TokenizerManager } from "./utils/tokenizerManager";
+import { TranscribeManager } from "./utils/transcribeManager";
+import { TTSManager } from "./utils/ttsManager";
+import { VisionManager } from "./utils/visionManager";
+import { basename } from "path";
 
 // Words to punish in LLM responses
 /**
@@ -35,54 +40,54 @@ import { basename } from 'path';
  * @type {string[]}
  */
 const wordsToPunish = [
-  ' please',
-  ' feel',
-  ' free',
-  '!',
-  '–',
-  '—',
-  '?',
-  '.',
-  ',',
-  '; ',
-  ' cosmos',
-  ' tapestry',
-  ' tapestries',
-  ' glitch',
-  ' matrix',
-  ' cyberspace',
-  ' troll',
-  ' questions',
-  ' topics',
-  ' discuss',
-  ' basically',
-  ' simulation',
-  ' simulate',
-  ' universe',
-  ' like',
-  ' debug',
-  ' debugging',
-  ' wild',
-  ' existential',
-  ' juicy',
-  ' circuits',
-  ' help',
-  ' ask',
-  ' happy',
-  ' just',
-  ' cosmic',
-  ' cool',
-  ' joke',
-  ' punchline',
-  ' fancy',
-  ' glad',
-  ' assist',
-  ' algorithm',
-  ' Indeed',
-  ' Furthermore',
-  ' However',
-  ' Notably',
-  ' Therefore',
+  " please",
+  " feel",
+  " free",
+  "!",
+  "–",
+  "—",
+  "?",
+  ".",
+  ",",
+  "; ",
+  " cosmos",
+  " tapestry",
+  " tapestries",
+  " glitch",
+  " matrix",
+  " cyberspace",
+  " troll",
+  " questions",
+  " topics",
+  " discuss",
+  " basically",
+  " simulation",
+  " simulate",
+  " universe",
+  " like",
+  " debug",
+  " debugging",
+  " wild",
+  " existential",
+  " juicy",
+  " circuits",
+  " help",
+  " ask",
+  " happy",
+  " just",
+  " cosmic",
+  " cool",
+  " joke",
+  " punchline",
+  " fancy",
+  " glad",
+  " assist",
+  " algorithm",
+  " Indeed",
+  " Furthermore",
+  " However",
+  " Notably",
+  " Therefore",
 ];
 
 /**
@@ -109,14 +114,14 @@ class LocalAIManager {
   private modelPath!: string;
   private mediumModelPath!: string;
   private embeddingModelPath!: string;
-  private cacheDir: string;
-  private tokenizerManager: TokenizerManager;
-  private downloadManager: DownloadManager;
-  private visionManager: VisionManager;
+  private cacheDir!: string;
+  private tokenizerManager!: TokenizerManager;
+  private downloadManager!: DownloadManager;
+  private visionManager!: VisionManager;
   private activeModelConfig: ModelSpec;
   private embeddingModelConfig: EmbeddingModelSpec;
-  private transcribeManager: TranscribeManager;
-  private ttsManager: TTSManager;
+  private transcribeManager!: TranscribeManager;
+  private ttsManager!: TTSManager;
   private config: Config | null = null; // Store validated config
 
   // Initialization state flag
@@ -137,7 +142,7 @@ class LocalAIManager {
   private ttsInitializingPromise: Promise<void> | null = null;
   private environmentInitializingPromise: Promise<void> | null = null; // Add promise for environment
 
-  private modelsDir: string;
+  private modelsDir!: string;
 
   /**
    * Private constructor function to initialize base managers and paths.
@@ -162,8 +167,14 @@ class LocalAIManager {
     this._setupModelsDir();
 
     // Initialize managers that depend on modelsDir
-    this.downloadManager = DownloadManager.getInstance(this.cacheDir, this.modelsDir);
-    this.tokenizerManager = TokenizerManager.getInstance(this.cacheDir, this.modelsDir);
+    this.downloadManager = DownloadManager.getInstance(
+      this.cacheDir,
+      this.modelsDir
+    );
+    this.tokenizerManager = TokenizerManager.getInstance(
+      this.cacheDir,
+      this.modelsDir
+    );
     this.visionManager = VisionManager.getInstance(this.cacheDir);
     this.transcribeManager = TranscribeManager.getInstance(this.cacheDir);
     this.ttsManager = TTSManager.getInstance(this.cacheDir);
@@ -175,14 +186,18 @@ class LocalAIManager {
    */
   private _setupModelsDir(): void {
     // Set up models directory consistently, similar to cacheDir
-    const modelsDirEnv = this.config?.MODELS_DIR?.trim() || process.env.MODELS_DIR?.trim();
+    const modelsDirEnv =
+      this.config?.MODELS_DIR?.trim() || process.env.MODELS_DIR?.trim();
     if (modelsDirEnv) {
       this.modelsDir = path.resolve(modelsDirEnv);
-      logger.info('Using models directory from MODELS_DIR environment variable:', this.modelsDir);
-    } else {
-      this.modelsDir = path.join(os.homedir(), '.eliza', 'models');
       logger.info(
-        'MODELS_DIR environment variable not set, using default models directory:',
+        "Using models directory from MODELS_DIR environment variable:",
+        this.modelsDir
+      );
+    } else {
+      this.modelsDir = path.join(os.homedir(), ".eliza", "models");
+      logger.info(
+        "MODELS_DIR environment variable not set, using default models directory:",
         this.modelsDir
       );
     }
@@ -190,9 +205,12 @@ class LocalAIManager {
     // Ensure models directory exists
     if (!fs.existsSync(this.modelsDir)) {
       fs.mkdirSync(this.modelsDir, { recursive: true });
-      logger.debug('Ensured models directory exists (created):', this.modelsDir);
+      logger.debug(
+        "Ensured models directory exists (created):",
+        this.modelsDir
+      );
     } else {
-      logger.debug('Models directory already exists:', this.modelsDir);
+      logger.debug("Models directory already exists:", this.modelsDir);
     }
   }
 
@@ -202,29 +220,33 @@ class LocalAIManager {
    */
   private _setupCacheDir(): void {
     // Set up cache directory
-    const cacheDirEnv = this.config?.CACHE_DIR?.trim() || process.env.CACHE_DIR?.trim();
+    const cacheDirEnv =
+      this.config?.CACHE_DIR?.trim() || process.env.CACHE_DIR?.trim();
     if (cacheDirEnv) {
       this.cacheDir = path.resolve(cacheDirEnv);
-      logger.info('Using cache directory from CACHE_DIR environment variable:', this.cacheDir);
+      logger.info(
+        "Using cache directory from CACHE_DIR environment variable:",
+        this.cacheDir
+      );
     } else {
-      const cacheDir = path.join(os.homedir(), '.eliza', 'cache');
+      const cacheDir = path.join(os.homedir(), ".eliza", "cache");
       // Ensure cache directory exists
       if (!fs.existsSync(cacheDir)) {
         fs.mkdirSync(cacheDir, { recursive: true });
-        logger.debug('Ensuring cache directory exists (created):', cacheDir);
+        logger.debug("Ensuring cache directory exists (created):", cacheDir);
       }
       this.cacheDir = cacheDir;
       logger.info(
-        'CACHE_DIR environment variable not set, using default cache directory:',
+        "CACHE_DIR environment variable not set, using default cache directory:",
         this.cacheDir
       );
     }
     // Ensure cache directory exists if specified via env var but not yet created
     if (!fs.existsSync(this.cacheDir)) {
       fs.mkdirSync(this.cacheDir, { recursive: true });
-      logger.debug('Ensured cache directory exists (created):', this.cacheDir);
+      logger.debug("Ensured cache directory exists (created):", this.cacheDir);
     } else {
-      logger.debug('Cache directory already exists:', this.cacheDir);
+      logger.debug("Cache directory already exists:", this.cacheDir);
     }
   }
 
@@ -255,7 +277,7 @@ class LocalAIManager {
 
     this.environmentInitializingPromise = (async () => {
       try {
-        logger.info('Initializing environment configuration...');
+        logger.info("Initializing environment configuration...");
 
         // Re-validate config to ensure it's up to date
         this.config = await validateConfig();
@@ -264,20 +286,32 @@ class LocalAIManager {
         this._postValidateInit();
 
         // Set model paths based on validated config
-        this.modelPath = path.join(this.modelsDir, this.config.LOCAL_SMALL_MODEL);
-        this.mediumModelPath = path.join(this.modelsDir, this.config.LOCAL_LARGE_MODEL);
-        this.embeddingModelPath = path.join(this.modelsDir, this.config.LOCAL_EMBEDDING_MODEL); // Set embedding path
+        this.modelPath = path.join(
+          this.modelsDir,
+          this.config.LOCAL_SMALL_MODEL
+        );
+        this.mediumModelPath = path.join(
+          this.modelsDir,
+          this.config.LOCAL_LARGE_MODEL
+        );
+        this.embeddingModelPath = path.join(
+          this.modelsDir,
+          this.config.LOCAL_EMBEDDING_MODEL
+        ); // Set embedding path
 
-        logger.info('Using small model path:', basename(this.modelPath));
-        logger.info('Using medium model path:', basename(this.mediumModelPath));
-        logger.info('Using embedding model path:', basename(this.embeddingModelPath));
+        logger.info("Using small model path:", basename(this.modelPath));
+        logger.info("Using medium model path:", basename(this.mediumModelPath));
+        logger.info(
+          "Using embedding model path:",
+          basename(this.embeddingModelPath)
+        );
 
-        logger.info('Environment configuration validated and model paths set');
+        logger.info("Environment configuration validated and model paths set");
 
         this.environmentInitialized = true;
-        logger.success('Environment initialization complete');
+        logger.success("Environment initialization complete");
       } catch (error) {
-        logger.error('Environment validation failed:', {
+        logger.error("Environment validation failed:", {
           error: error instanceof Error ? error.message : String(error),
           stack: error instanceof Error ? error.stack : undefined,
         });
@@ -320,16 +354,24 @@ class LocalAIManager {
       modelSpec = MODEL_SPECS.embedding;
       modelPathToDownload = this.embeddingModelPath; // Use configured path
     } else {
-      modelSpec = modelType === ModelType.TEXT_LARGE ? MODEL_SPECS.medium : MODEL_SPECS.small;
+      modelSpec =
+        modelType === ModelType.TEXT_LARGE
+          ? MODEL_SPECS.medium
+          : MODEL_SPECS.small;
       modelPathToDownload =
-        modelType === ModelType.TEXT_LARGE ? this.mediumModelPath : this.modelPath; // Use configured path
+        modelType === ModelType.TEXT_LARGE
+          ? this.mediumModelPath
+          : this.modelPath; // Use configured path
     }
 
     try {
       // Pass the determined path to the download manager
-      return await this.downloadManager.downloadModel(modelSpec, modelPathToDownload);
+      return await this.downloadManager.downloadModel(
+        modelSpec,
+        modelPathToDownload
+      );
     } catch (error) {
-      logger.error('Model download failed:', {
+      logger.error("Model download failed:", {
         error: error instanceof Error ? error.message : String(error),
         modelType,
         modelPath: modelPathToDownload,
@@ -349,14 +391,14 @@ class LocalAIManager {
       await platformManager.initialize();
       const capabilities = platformManager.getCapabilities();
 
-      logger.info('Platform capabilities detected:', {
+      logger.info("Platform capabilities detected:", {
         platform: capabilities.platform,
-        gpu: capabilities.gpu?.type || 'none',
+        gpu: capabilities.gpu?.type || "none",
         recommendedModel: capabilities.recommendedModelSize,
         supportedBackends: capabilities.supportedBackends,
       });
     } catch (error) {
-      logger.warn('Platform detection failed:', error);
+      logger.warn("Platform detection failed:", error);
     }
   }
 
@@ -366,7 +408,9 @@ class LocalAIManager {
    * @param {ModelTypeName} modelType - The type of model to initialize (default: ModelType.TEXT_SMALL)
    * @returns {Promise<void>} A promise that resolves when initialization is complete or rejects if an error occurs
    */
-  async initialize(modelType: ModelTypeName = ModelType.TEXT_SMALL): Promise<void> {
+  async initialize(
+    modelType: ModelTypeName = ModelType.TEXT_SMALL
+  ): Promise<void> {
     await this.initializeEnvironment(); // Ensure environment is initialized first
     if (modelType === ModelType.TEXT_LARGE) {
       await this.lazyInitMediumModel();
@@ -383,12 +427,15 @@ class LocalAIManager {
   public async initializeEmbedding(): Promise<void> {
     try {
       await this.initializeEnvironment(); // Ensure environment/paths are ready
-      logger.info('Initializing embedding model...');
-      logger.info('Models directory:', this.modelsDir);
+      logger.info("Initializing embedding model...");
+      logger.info("Models directory:", this.modelsDir);
 
       // Ensure models directory exists
       if (!fs.existsSync(this.modelsDir)) {
-        logger.warn('Models directory does not exist, creating it:', this.modelsDir);
+        logger.warn(
+          "Models directory does not exist, creating it:",
+          this.modelsDir
+        );
         fs.mkdirSync(this.modelsDir, { recursive: true });
       }
 
@@ -403,7 +450,7 @@ class LocalAIManager {
 
       // Load the embedding model
       if (!this.embeddingModel) {
-        logger.info('Loading embedding model:', this.embeddingModelPath); // Use the correct path
+        logger.info("Loading embedding model:", this.embeddingModelPath); // Use the correct path
 
         this.embeddingModel = await this.llama.loadModel({
           modelPath: this.embeddingModelPath, // Use the correct path
@@ -412,15 +459,16 @@ class LocalAIManager {
         });
 
         // Create context for embeddings
-        this.embeddingContext = await this.embeddingModel.createEmbeddingContext({
-          contextSize: this.embeddingModelConfig.contextSize,
-          batchSize: 512,
-        });
+        this.embeddingContext =
+          await this.embeddingModel.createEmbeddingContext({
+            contextSize: this.embeddingModelConfig.contextSize,
+            batchSize: 512,
+          });
 
-        logger.success('Embedding model initialized successfully');
+        logger.success("Embedding model initialized successfully");
       }
     } catch (error) {
-      logger.error('Embedding initialization failed with details:', {
+      logger.error("Embedding initialization failed with details:", {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
         modelsDir: this.modelsDir,
@@ -439,10 +487,10 @@ class LocalAIManager {
       await this.lazyInitEmbedding();
 
       if (!this.embeddingModel || !this.embeddingContext) {
-        throw new Error('Failed to initialize embedding model');
+        throw new Error("Failed to initialize embedding model");
       }
 
-      logger.info('Generating embedding for text', { textLength: text.length });
+      logger.info("Generating embedding for text", { textLength: text.length });
 
       // Use the native getEmbedding method
       const embeddingResult = await this.embeddingContext.getEmbeddingFor(text);
@@ -453,13 +501,15 @@ class LocalAIManager {
       // Normalize the embedding if needed (may already be normalized)
       const normalizedEmbedding = this.normalizeEmbedding(mutableEmbedding);
 
-      logger.info('Embedding generation complete', { dimensions: normalizedEmbedding.length });
+      logger.info("Embedding generation complete", {
+        dimensions: normalizedEmbedding.length,
+      });
       return normalizedEmbedding;
     } catch (error) {
-      logger.error('Embedding generation failed:', {
+      logger.error("Embedding generation failed:", {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
-        textLength: text?.length ?? 'text is null',
+        textLength: text?.length ?? "text is null",
       });
 
       // Return zero vector with correct dimensions as fallback
@@ -519,15 +569,16 @@ class LocalAIManager {
           });
 
           // Create context for embeddings
-          this.embeddingContext = await this.embeddingModel.createEmbeddingContext({
-            contextSize: this.embeddingModelConfig.contextSize,
-            batchSize: 512,
-          });
+          this.embeddingContext =
+            await this.embeddingModel.createEmbeddingContext({
+              contextSize: this.embeddingModelConfig.contextSize,
+              batchSize: 512,
+            });
 
           this.embeddingInitialized = true;
-          logger.info('Embedding model initialized successfully');
+          logger.info("Embedding model initialized successfully");
         } catch (error) {
-          logger.error('Failed to initialize embedding model:', error);
+          logger.error("Failed to initialize embedding model:", error);
           this.embeddingInitializingPromise = null;
           throw error;
         }
@@ -544,13 +595,13 @@ class LocalAIManager {
   async generateText(params: GenerateTextParams): Promise<string> {
     try {
       await this.initializeEnvironment(); // Ensure environment is initialized
-      logger.info('Generating text with model:', params.modelType);
+      logger.info("Generating text with model:", params.modelType);
       // Lazy initialize the appropriate model
       if (params.modelType === ModelType.TEXT_LARGE) {
         await this.lazyInitMediumModel();
 
         if (!this.mediumModel) {
-          throw new Error('Medium model initialization failed');
+          throw new Error("Medium model initialization failed");
         }
 
         this.activeModelConfig = MODEL_SPECS.medium;
@@ -564,7 +615,7 @@ class LocalAIManager {
         await this.lazyInitSmallModel();
 
         if (!this.smallModel) {
-          throw new Error('Small model initialization failed');
+          throw new Error("Small model initialization failed");
         }
 
         this.activeModelConfig = MODEL_SPECS.small;
@@ -577,7 +628,7 @@ class LocalAIManager {
       }
 
       if (!this.ctx) {
-        throw new Error('Failed to create prompt');
+        throw new Error("Failed to create prompt");
       }
 
       // QUICK TEST FIX: Always get fresh sequence
@@ -590,22 +641,26 @@ class LocalAIManager {
       });
 
       if (!this.chatSession) {
-        throw new Error('Failed to create chat session');
+        throw new Error("Failed to create chat session");
       }
-      logger.info('Created new chat session for model:', params.modelType);
+      logger.info("Created new chat session for model:", params.modelType);
       // Log incoming prompt for debugging
-      logger.info('Incoming prompt structure:', {
+      logger.info("Incoming prompt structure:", {
         contextLength: params.prompt.length,
-        hasAction: params.prompt.includes('action'),
+        hasAction: params.prompt.includes("action"),
         runtime: !!params.runtime,
         stopSequences: params.stopSequences,
       });
 
-      const tokens = await this.tokenizerManager.encode(params.prompt, this.activeModelConfig);
-      logger.info('Input tokens:', { count: tokens.length });
+      const tokens = await this.tokenizerManager.encode(
+        params.prompt,
+        this.activeModelConfig
+      );
+      logger.info("Input tokens:", { count: tokens.length });
 
       // QUICK TEST FIX: Add system message to reset prompt
-      const systemMessage = 'You are a helpful AI assistant. Respond to the current request only.';
+      const systemMessage =
+        "You are a helpful AI assistant. Respond to the current request only.";
       await this.chatSession.prompt(systemMessage, {
         maxTokens: 1, // Minimal tokens for system message
         temperature: 0.0,
@@ -617,7 +672,9 @@ class LocalAIManager {
         topP: 0.9,
         repeatPenalty: {
           punishTokensFilter: () =>
-            this.smallModel ? this.smallModel.tokenize(wordsToPunish.join(' ')) : [],
+            this.smallModel
+              ? this.smallModel.tokenize(wordsToPunish.join(" "))
+              : [],
           penalty: 1.2,
           frequencyPenalty: 0.7,
           presencePenalty: 0.7,
@@ -625,23 +682,23 @@ class LocalAIManager {
       });
 
       // Log raw response for debugging
-      logger.info('Raw response structure:', {
+      logger.info("Raw response structure:", {
         responseLength: response.length,
-        hasAction: response.includes('action'),
-        hasThinkTag: response.includes('<think>'),
+        hasAction: response.includes("action"),
+        hasThinkTag: response.includes("<think>"),
       });
 
       // Clean think tags if present
-      if (response.includes('<think>')) {
-        logger.info('Cleaning think tags from response');
-        response = response.replace(/<think>[\s\S]*?<\/think>\n?/g, '');
-        logger.info('Think tags removed from response');
+      if (response.includes("<think>")) {
+        logger.info("Cleaning think tags from response");
+        response = response.replace(/<think>[\s\S]*?<\/think>\n?/g, "");
+        logger.info("Think tags removed from response");
       }
 
       // Return the raw response and let the framework handle JSON parsing and action validation
       return response;
     } catch (error) {
-      logger.error('Text generation failed:', error);
+      logger.error("Text generation failed:", error);
       throw error;
     }
   }
@@ -658,11 +715,11 @@ class LocalAIManager {
       await this.lazyInitVision();
 
       // Convert buffer to data URL
-      const base64 = imageData.toString('base64');
+      const base64 = imageData.toString("base64");
       const dataUrl = `data:${mimeType};base64,${base64}`;
       return await this.visionManager.processImage(dataUrl);
     } catch (error) {
-      logger.error('Image description failed:', error);
+      logger.error("Image description failed:", error);
       throw error;
     }
   }
@@ -678,7 +735,7 @@ class LocalAIManager {
       const result = await this.transcribeManager.transcribe(audioBuffer);
       return result.text;
     } catch (error) {
-      logger.error('Audio transcription failed:', {
+      logger.error("Audio transcription failed:", {
         error: error instanceof Error ? error.message : String(error),
         bufferSize: audioBuffer.length,
       });
@@ -696,7 +753,7 @@ class LocalAIManager {
 
       return await this.ttsManager.generateSpeech(text);
     } catch (error) {
-      logger.error('Speech generation failed:', {
+      logger.error("Speech generation failed:", {
         error: error instanceof Error ? error.message : String(error),
         textLength: text.length,
       });
@@ -756,9 +813,9 @@ class LocalAIManager {
           this.ctx = ctx;
           this.sequence = undefined; // Reset sequence to create a new one
           this.smallModelInitialized = true;
-          logger.info('Small model initialized successfully');
+          logger.info("Small model initialized successfully");
         } catch (error) {
-          logger.error('Failed to initialize small model:', error);
+          logger.error("Failed to initialize small model:", error);
           this.smallModelInitializingPromise = null;
           throw error;
         }
@@ -799,9 +856,9 @@ class LocalAIManager {
 
           this.mediumModel = mediumModel;
           this.mediumModelInitialized = true;
-          logger.info('Medium model initialized successfully');
+          logger.info("Medium model initialized successfully");
         } catch (error) {
-          logger.error('Failed to initialize medium model:', error);
+          logger.error("Failed to initialize medium model:", error);
           this.mediumModelInitializingPromise = null;
           throw error;
         }
@@ -824,9 +881,9 @@ class LocalAIManager {
           // Use existing initialization code from the file
           // ...
           this.visionInitialized = true;
-          logger.info('Vision model initialized successfully');
+          logger.info("Vision model initialized successfully");
         } catch (error) {
-          logger.error('Failed to initialize vision model:', error);
+          logger.error("Failed to initialize vision model:", error);
           this.visionInitializingPromise = null;
           throw error;
         }
@@ -850,7 +907,9 @@ class LocalAIManager {
 
           // Initialize TranscribeManager if not already done
           if (!this.transcribeManager) {
-            this.transcribeManager = TranscribeManager.getInstance(this.cacheDir);
+            this.transcribeManager = TranscribeManager.getInstance(
+              this.cacheDir
+            );
           }
 
           // Ensure FFmpeg is available
@@ -859,11 +918,11 @@ class LocalAIManager {
             // FFmpeg is not available, log instructions and throw
             // The TranscribeManager's ensureFFmpeg or initializeFFmpeg would have already logged instructions.
             logger.error(
-              'FFmpeg is not available or not configured correctly. Cannot proceed with transcription.'
+              "FFmpeg is not available or not configured correctly. Cannot proceed with transcription."
             );
             // No need to call logFFmpegInstallInstructions here as ensureFFmpeg/initializeFFmpeg already does.
             throw new Error(
-              'FFmpeg is required for transcription but is not available. Please see server logs for installation instructions.'
+              "FFmpeg is required for transcription but is not available. Please see server logs for installation instructions."
             );
           }
 
@@ -871,10 +930,12 @@ class LocalAIManager {
           // (Assuming TranscribeManager handles its own specific model init if any,
           // or that nodewhisper handles it internally)
           this.transcriptionInitialized = true;
-          logger.info('Transcription prerequisites (FFmpeg) checked and ready.');
-          logger.info('Transcription model initialized successfully');
+          logger.info(
+            "Transcription prerequisites (FFmpeg) checked and ready."
+          );
+          logger.info("Transcription model initialized successfully");
         } catch (error) {
-          logger.error('Failed to initialize transcription model:', error);
+          logger.error("Failed to initialize transcription model:", error);
           this.transcriptionInitializingPromise = null;
           throw error;
         }
@@ -901,9 +962,9 @@ class LocalAIManager {
           // Note: The internal pipeline initialization within TTSManager happens
           // when generateSpeech calls its own initialize method.
           this.ttsInitialized = true;
-          logger.info('TTS model initialized successfully');
+          logger.info("TTS model initialized successfully");
         } catch (error) {
-          logger.error('Failed to lazy initialize TTS components:', error);
+          logger.error("Failed to lazy initialize TTS components:", error);
           this.ttsInitializingPromise = null; // Allow retry
           throw error;
         }
@@ -922,17 +983,17 @@ const localAIManager = LocalAIManager.getInstance();
  * @type {Plugin}
  */
 export const localAiPlugin: Plugin = {
-  name: 'local-ai',
-  description: 'Local AI plugin using LLaMA models',
+  name: "local-ai",
+  description: "Local AI plugin using LLaMA models",
 
   async init() {
     try {
-      logger.debug('Initializing local-ai plugin environment...');
+      logger.debug("Initializing local-ai plugin environment...");
       // Call initializeEnvironment (now public)
       await localAIManager.initializeEnvironment();
-      logger.success('Local AI plugin configuration validated and initialized');
+      logger.success("Local AI plugin configuration validated and initialized");
     } catch (error) {
-      logger.error('Plugin initialization failed:', {
+      logger.error("Plugin initialization failed:", {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });
@@ -954,7 +1015,7 @@ export const localAiPlugin: Plugin = {
           modelType: ModelType.TEXT_SMALL,
         });
       } catch (error) {
-        logger.error('Error in TEXT_SMALL handler:', error);
+        logger.error("Error in TEXT_SMALL handler:", error);
         throw error;
       }
     },
@@ -973,38 +1034,46 @@ export const localAiPlugin: Plugin = {
           modelType: ModelType.TEXT_LARGE,
         });
       } catch (error) {
-        logger.error('Error in TEXT_LARGE handler:', error);
+        logger.error("Error in TEXT_LARGE handler:", error);
         throw error;
       }
     },
 
-    [ModelType.TEXT_EMBEDDING]: async (_runtime: IAgentRuntime, params: TextEmbeddingParams) => {
+    [ModelType.TEXT_EMBEDDING]: async (
+      _runtime: IAgentRuntime,
+      params: TextEmbeddingParams
+    ) => {
       const text = params?.text;
       try {
         // Handle null/undefined/empty text
         if (!text) {
-          logger.debug('Null or empty text input for embedding, returning zero vector');
+          logger.debug(
+            "Null or empty text input for embedding, returning zero vector"
+          );
           return new Array(384).fill(0);
         }
 
         // Pass the raw text directly to the framework without any manipulation
         return await localAIManager.generateEmbedding(text);
       } catch (error) {
-        logger.error('Error in TEXT_EMBEDDING handler:', {
+        logger.error("Error in TEXT_EMBEDDING handler:", {
           error: error instanceof Error ? error.message : String(error),
           fullText: text,
           textType: typeof text,
-          textStructure: text !== null ? JSON.stringify(text, null, 2) : 'null',
+          textStructure: text !== null ? JSON.stringify(text, null, 2) : "null",
         });
         return new Array(384).fill(0);
       }
     },
 
-    [ModelType.OBJECT_SMALL]: async (runtime: IAgentRuntime, params: ObjectGenerationParams) => {
+    [ModelType.OBJECT_SMALL]: async (
+      runtime: IAgentRuntime,
+      params: ObjectGenerationParams
+    ) => {
       try {
         // Ensure environment is initialized (now public)
         await localAIManager.initializeEnvironment();
-        logger.info('OBJECT_SMALL handler - Processing request:', {
+        logger.info("OBJECT_SMALL handler - Processing request:", {
           prompt: params.prompt,
           hasSchema: !!params.schema,
           temperature: params.temperature,
@@ -1012,9 +1081,12 @@ export const localAiPlugin: Plugin = {
 
         // Enhance the prompt to request JSON output
         let jsonPrompt = params.prompt;
-        if (!jsonPrompt.includes('```json') && !jsonPrompt.includes('respond with valid JSON')) {
+        if (
+          !jsonPrompt.includes("```json") &&
+          !jsonPrompt.includes("respond with valid JSON")
+        ) {
           jsonPrompt +=
-            '\nPlease respond with valid JSON only, without any explanations, markdown formatting, or additional text.';
+            "\nPlease respond with valid JSON only, without any explanations, markdown formatting, or additional text.";
         }
 
         // Directly generate text using the local small model
@@ -1051,30 +1123,35 @@ export const localAiPlugin: Plugin = {
           };
 
           const extractedJsonText = extractJSON(textResponse);
-          logger.debug('Extracted JSON text:', extractedJsonText);
+          logger.debug("Extracted JSON text:", extractedJsonText);
 
           let jsonObject;
           try {
             jsonObject = JSON.parse(extractedJsonText);
           } catch (parseError) {
             // Try fixing common JSON issues
-            logger.debug('Initial JSON parse failed, attempting to fix common issues');
+            logger.debug(
+              "Initial JSON parse failed, attempting to fix common issues"
+            );
 
             // Replace any unescaped newlines in string values
             const fixedJson = extractedJsonText
               .replace(/:\s*"([^"]*)(?:\n)([^"]*)"/g, ': "$1\\n$2"')
               // Remove any non-JSON text that might have gotten mixed into string values
-              .replace(/"([^"]*?)[^a-zA-Z0-9\s\.,;:\-_\(\)"'\[\]{}]([^"]*?)"/g, '"$1$2"')
+              .replace(
+                /"([^"]*?)[^a-zA-Z0-9\s\.,;:\-_\(\)"'\[\]{}]([^"]*?)"/g,
+                '"$1$2"'
+              )
               // Fix missing quotes around property names
               .replace(/(\s*)(\w+)(\s*):/g, '$1"$2"$3:')
               // Fix trailing commas in arrays and objects
-              .replace(/,(\s*[\]}])/g, '$1');
+              .replace(/,(\s*[\]}])/g, "$1");
 
             try {
               jsonObject = JSON.parse(fixedJson);
             } catch (finalError) {
-              logger.error('Failed to parse JSON after fixing:', finalError);
-              throw new Error('Invalid JSON returned from model');
+              logger.error("Failed to parse JSON after fixing:", finalError);
+              throw new Error("Invalid JSON returned from model");
             }
           }
 
@@ -1088,27 +1165,30 @@ export const localAiPlugin: Plugin = {
                 }
               }
             } catch (schemaError) {
-              logger.error('Schema validation failed:', schemaError);
+              logger.error("Schema validation failed:", schemaError);
             }
           }
 
           return jsonObject;
         } catch (parseError) {
-          logger.error('Failed to parse JSON:', parseError);
-          logger.error('Raw response:', textResponse);
-          throw new Error('Invalid JSON returned from model');
+          logger.error("Failed to parse JSON:", parseError);
+          logger.error("Raw response:", textResponse);
+          throw new Error("Invalid JSON returned from model");
         }
       } catch (error) {
-        logger.error('Error in OBJECT_SMALL handler:', error);
+        logger.error("Error in OBJECT_SMALL handler:", error);
         throw error;
       }
     },
 
-    [ModelType.OBJECT_LARGE]: async (runtime: IAgentRuntime, params: ObjectGenerationParams) => {
+    [ModelType.OBJECT_LARGE]: async (
+      runtime: IAgentRuntime,
+      params: ObjectGenerationParams
+    ) => {
       try {
         // Ensure environment is initialized (now public)
         await localAIManager.initializeEnvironment();
-        logger.info('OBJECT_LARGE handler - Processing request:', {
+        logger.info("OBJECT_LARGE handler - Processing request:", {
           prompt: params.prompt,
           hasSchema: !!params.schema,
           temperature: params.temperature,
@@ -1116,9 +1196,12 @@ export const localAiPlugin: Plugin = {
 
         // Enhance the prompt to request JSON output
         let jsonPrompt = params.prompt;
-        if (!jsonPrompt.includes('```json') && !jsonPrompt.includes('respond with valid JSON')) {
+        if (
+          !jsonPrompt.includes("```json") &&
+          !jsonPrompt.includes("respond with valid JSON")
+        ) {
           jsonPrompt +=
-            '\nPlease respond with valid JSON only, without any explanations, markdown formatting, or additional text.';
+            "\nPlease respond with valid JSON only, without any explanations, markdown formatting, or additional text.";
         }
 
         // Directly generate text using the local large model
@@ -1160,38 +1243,43 @@ export const localAiPlugin: Plugin = {
             return (
               jsonText
                 // Remove any lines that look like log statements
-                .replace(/\[DEBUG\].*?(\n|$)/g, '\n')
-                .replace(/\[LOG\].*?(\n|$)/g, '\n')
-                .replace(/console\.log.*?(\n|$)/g, '\n')
+                .replace(/\[DEBUG\].*?(\n|$)/g, "\n")
+                .replace(/\[LOG\].*?(\n|$)/g, "\n")
+                .replace(/console\.log.*?(\n|$)/g, "\n")
             );
           };
 
           const extractedJsonText = extractJSON(textResponse);
           const cleanedJsonText = cleanupJSON(extractedJsonText);
-          logger.debug('Extracted JSON text:', cleanedJsonText);
+          logger.debug("Extracted JSON text:", cleanedJsonText);
 
           let jsonObject;
           try {
             jsonObject = JSON.parse(cleanedJsonText);
           } catch (parseError) {
             // Try fixing common JSON issues
-            logger.debug('Initial JSON parse failed, attempting to fix common issues');
+            logger.debug(
+              "Initial JSON parse failed, attempting to fix common issues"
+            );
 
             // Replace any unescaped newlines in string values
             const fixedJson = cleanedJsonText
               .replace(/:\s*"([^"]*)(?:\n)([^"]*)"/g, ': "$1\\n$2"')
               // Remove any non-JSON text that might have gotten mixed into string values
-              .replace(/"([^"]*?)[^a-zA-Z0-9\s\.,;:\-_\(\)"'\[\]{}]([^"]*?)"/g, '"$1$2"')
+              .replace(
+                /"([^"]*?)[^a-zA-Z0-9\s\.,;:\-_\(\)"'\[\]{}]([^"]*?)"/g,
+                '"$1$2"'
+              )
               // Fix missing quotes around property names
               .replace(/(\s*)(\w+)(\s*):/g, '$1"$2"$3:')
               // Fix trailing commas in arrays and objects
-              .replace(/,(\s*[\]}])/g, '$1');
+              .replace(/,(\s*[\]}])/g, "$1");
 
             try {
               jsonObject = JSON.parse(fixedJson);
             } catch (finalError) {
-              logger.error('Failed to parse JSON after fixing:', finalError);
-              throw new Error('Invalid JSON returned from model');
+              logger.error("Failed to parse JSON after fixing:", finalError);
+              throw new Error("Invalid JSON returned from model");
             }
           }
 
@@ -1205,18 +1293,18 @@ export const localAiPlugin: Plugin = {
                 }
               }
             } catch (schemaError) {
-              logger.error('Schema validation failed:', schemaError);
+              logger.error("Schema validation failed:", schemaError);
             }
           }
 
           return jsonObject;
         } catch (parseError) {
-          logger.error('Failed to parse JSON:', parseError);
-          logger.error('Raw response:', textResponse);
-          throw new Error('Invalid JSON returned from model');
+          logger.error("Failed to parse JSON:", parseError);
+          logger.error("Raw response:", textResponse);
+          throw new Error("Invalid JSON returned from model");
         }
       } catch (error) {
-        logger.error('Error in OBJECT_LARGE handler:', error);
+        logger.error("Error in OBJECT_LARGE handler:", error);
         throw error;
       }
     },
@@ -1230,7 +1318,7 @@ export const localAiPlugin: Plugin = {
         const config = localAIManager.getActiveModelConfig();
         return await manager.encode(text, config);
       } catch (error) {
-        logger.error('Error in TEXT_TOKENIZER_ENCODE handler:', error);
+        logger.error("Error in TEXT_TOKENIZER_ENCODE handler:", error);
         throw error;
       }
     },
@@ -1244,14 +1332,17 @@ export const localAiPlugin: Plugin = {
         const config = localAIManager.getActiveModelConfig();
         return await manager.decode(tokens, config);
       } catch (error) {
-        logger.error('Error in TEXT_TOKENIZER_DECODE handler:', error);
+        logger.error("Error in TEXT_TOKENIZER_DECODE handler:", error);
         throw error;
       }
     },
 
-    [ModelType.IMAGE_DESCRIPTION]: async (_runtime: IAgentRuntime, imageUrl: string) => {
+    [ModelType.IMAGE_DESCRIPTION]: async (
+      _runtime: IAgentRuntime,
+      imageUrl: string
+    ) => {
       try {
-        logger.info('Processing image from URL:', imageUrl);
+        logger.info("Processing image from URL:", imageUrl);
 
         // Fetch the image from URL
         const response = await fetch(imageUrl);
@@ -1260,11 +1351,11 @@ export const localAiPlugin: Plugin = {
         }
 
         const buffer = Buffer.from(await response.arrayBuffer());
-        const mimeType = response.headers.get('content-type') || 'image/jpeg';
+        const mimeType = response.headers.get("content-type") || "image/jpeg";
 
         return await localAIManager.describeImage(buffer, mimeType);
       } catch (error) {
-        logger.error('Error in IMAGE_DESCRIPTION handler:', {
+        logger.error("Error in IMAGE_DESCRIPTION handler:", {
           error: error instanceof Error ? error.message : String(error),
           imageUrl,
         });
@@ -1272,15 +1363,18 @@ export const localAiPlugin: Plugin = {
       }
     },
 
-    [ModelType.TRANSCRIPTION]: async (_runtime: IAgentRuntime, audioBuffer: Buffer) => {
+    [ModelType.TRANSCRIPTION]: async (
+      _runtime: IAgentRuntime,
+      audioBuffer: Buffer
+    ) => {
       try {
-        logger.info('Processing audio transcription:', {
+        logger.info("Processing audio transcription:", {
           bufferSize: audioBuffer.length,
         });
 
         return await localAIManager.transcribeAudio(audioBuffer);
       } catch (error) {
-        logger.error('Error in TRANSCRIPTION handler:', {
+        logger.error("Error in TRANSCRIPTION handler:", {
           error: error instanceof Error ? error.message : String(error),
           bufferSize: audioBuffer.length,
         });
@@ -1288,11 +1382,14 @@ export const localAiPlugin: Plugin = {
       }
     },
 
-    [ModelType.TEXT_TO_SPEECH]: async (_runtime: IAgentRuntime, text: string) => {
+    [ModelType.TEXT_TO_SPEECH]: async (
+      _runtime: IAgentRuntime,
+      text: string
+    ) => {
       try {
         return await localAIManager.generateSpeech(text);
       } catch (error) {
-        logger.error('Error in TEXT_TO_SPEECH handler:', {
+        logger.error("Error in TEXT_TO_SPEECH handler:", {
           error: error instanceof Error ? error.message : String(error),
           textLength: text.length,
         });
@@ -1302,13 +1399,13 @@ export const localAiPlugin: Plugin = {
   },
   tests: [
     {
-      name: 'local_ai_plugin_tests',
+      name: "local_ai_plugin_tests",
       tests: [
         {
-          name: 'local_ai_test_initialization',
+          name: "local_ai_test_initialization",
           fn: async (runtime) => {
             try {
-              logger.info('Starting initialization test');
+              logger.info("Starting initialization test");
 
               // Test TEXT_SMALL model initialization
               const result = await runtime.useModel(ModelType.TEXT_SMALL, {
@@ -1317,19 +1414,19 @@ export const localAiPlugin: Plugin = {
                 stopSequences: [],
               });
 
-              logger.info('Model response:', result);
+              logger.info("Model response:", result);
 
-              if (!result || typeof result !== 'string') {
-                throw new Error('Invalid response from model');
+              if (!result || typeof result !== "string") {
+                throw new Error("Invalid response from model");
               }
 
-              if (!result.includes('successful')) {
-                throw new Error('Model response does not indicate success');
+              if (!result.includes("successful")) {
+                throw new Error("Model response does not indicate success");
               }
 
-              logger.success('Initialization test completed successfully');
+              logger.success("Initialization test completed successfully");
             } catch (error) {
-              logger.error('Initialization test failed:', {
+              logger.error("Initialization test failed:", {
                 error: error instanceof Error ? error.message : String(error),
                 stack: error instanceof Error ? error.stack : undefined,
               });
@@ -1338,30 +1435,30 @@ export const localAiPlugin: Plugin = {
           },
         },
         {
-          name: 'local_ai_test_text_large',
+          name: "local_ai_test_text_large",
           fn: async (runtime) => {
             try {
-              logger.info('Starting TEXT_LARGE model test');
+              logger.info("Starting TEXT_LARGE model test");
 
               const result = await runtime.useModel(ModelType.TEXT_LARGE, {
                 prompt:
-                  'Debug Mode: Generate a one-sentence response about artificial intelligence.',
+                  "Debug Mode: Generate a one-sentence response about artificial intelligence.",
                 stopSequences: [],
               });
 
-              logger.info('Large model response:', result);
+              logger.info("Large model response:", result);
 
-              if (!result || typeof result !== 'string') {
-                throw new Error('Invalid response from large model');
+              if (!result || typeof result !== "string") {
+                throw new Error("Invalid response from large model");
               }
 
               if (result.length < 10) {
-                throw new Error('Response too short, possible model failure');
+                throw new Error("Response too short, possible model failure");
               }
 
-              logger.success('TEXT_LARGE test completed successfully');
+              logger.success("TEXT_LARGE test completed successfully");
             } catch (error) {
-              logger.error('TEXT_LARGE test failed:', {
+              logger.error("TEXT_LARGE test failed:", {
                 error: error instanceof Error ? error.message : String(error),
                 stack: error instanceof Error ? error.stack : undefined,
               });
@@ -1370,39 +1467,51 @@ export const localAiPlugin: Plugin = {
           },
         },
         {
-          name: 'local_ai_test_text_embedding',
+          name: "local_ai_test_text_embedding",
           fn: async (runtime) => {
             try {
-              logger.info('Starting TEXT_EMBEDDING test');
+              logger.info("Starting TEXT_EMBEDDING test");
 
               // Test with normal text
-              const embedding = await runtime.useModel(ModelType.TEXT_EMBEDDING, {
-                text: 'This is a test of the text embedding model.',
-              });
+              const embedding = await runtime.useModel(
+                ModelType.TEXT_EMBEDDING,
+                {
+                  text: "This is a test of the text embedding model.",
+                }
+              );
 
-              logger.info('Embedding generated with dimensions:', embedding.length);
+              logger.info(
+                "Embedding generated with dimensions:",
+                embedding.length
+              );
 
               if (!Array.isArray(embedding)) {
-                throw new Error('Embedding is not an array');
+                throw new Error("Embedding is not an array");
               }
 
               if (embedding.length === 0) {
-                throw new Error('Embedding array is empty');
+                throw new Error("Embedding array is empty");
               }
 
-              if (embedding.some((val) => typeof val !== 'number')) {
-                throw new Error('Embedding contains non-numeric values');
+              if (embedding.some((val) => typeof val !== "number")) {
+                throw new Error("Embedding contains non-numeric values");
               }
 
               // Test with null input (should return zero vector)
-              const nullEmbedding = await runtime.useModel(ModelType.TEXT_EMBEDDING, null);
-              if (!Array.isArray(nullEmbedding) || nullEmbedding.some((val) => val !== 0)) {
-                throw new Error('Null input did not return zero vector');
+              const nullEmbedding = await runtime.useModel(
+                ModelType.TEXT_EMBEDDING,
+                null
+              );
+              if (
+                !Array.isArray(nullEmbedding) ||
+                nullEmbedding.some((val) => val !== 0)
+              ) {
+                throw new Error("Null input did not return zero vector");
               }
 
-              logger.success('TEXT_EMBEDDING test completed successfully');
+              logger.success("TEXT_EMBEDDING test completed successfully");
             } catch (error) {
-              logger.error('TEXT_EMBEDDING test failed:', {
+              logger.error("TEXT_EMBEDDING test failed:", {
                 error: error instanceof Error ? error.message : String(error),
                 stack: error instanceof Error ? error.stack : undefined,
               });
@@ -1411,30 +1520,35 @@ export const localAiPlugin: Plugin = {
           },
         },
         {
-          name: 'local_ai_test_tokenizer_encode',
+          name: "local_ai_test_tokenizer_encode",
           fn: async (runtime) => {
             try {
-              logger.info('Starting TEXT_TOKENIZER_ENCODE test');
-              const text = 'Hello tokenizer test!';
+              logger.info("Starting TEXT_TOKENIZER_ENCODE test");
+              const text = "Hello tokenizer test!";
 
-              const tokens = await runtime.useModel(ModelType.TEXT_TOKENIZER_ENCODE, { text });
-              logger.info('Encoded tokens:', { count: tokens.length });
+              const tokens = await runtime.useModel(
+                ModelType.TEXT_TOKENIZER_ENCODE,
+                { text }
+              );
+              logger.info("Encoded tokens:", { count: tokens.length });
 
               if (!Array.isArray(tokens)) {
-                throw new Error('Tokens output is not an array');
+                throw new Error("Tokens output is not an array");
               }
 
               if (tokens.length === 0) {
-                throw new Error('No tokens generated');
+                throw new Error("No tokens generated");
               }
 
               if (tokens.some((token) => !Number.isInteger(token))) {
-                throw new Error('Tokens contain non-integer values');
+                throw new Error("Tokens contain non-integer values");
               }
 
-              logger.success('TEXT_TOKENIZER_ENCODE test completed successfully');
+              logger.success(
+                "TEXT_TOKENIZER_ENCODE test completed successfully"
+              );
             } catch (error) {
-              logger.error('TEXT_TOKENIZER_ENCODE test failed:', {
+              logger.error("TEXT_TOKENIZER_ENCODE test failed:", {
                 error: error instanceof Error ? error.message : String(error),
                 stack: error instanceof Error ? error.stack : undefined,
               });
@@ -1443,33 +1557,41 @@ export const localAiPlugin: Plugin = {
           },
         },
         {
-          name: 'local_ai_test_tokenizer_decode',
+          name: "local_ai_test_tokenizer_decode",
           fn: async (runtime) => {
             try {
-              logger.info('Starting TEXT_TOKENIZER_DECODE test');
+              logger.info("Starting TEXT_TOKENIZER_DECODE test");
 
               // First encode some text
-              const originalText = 'Hello tokenizer test!';
-              const tokens = await runtime.useModel(ModelType.TEXT_TOKENIZER_ENCODE, {
-                text: originalText,
-              });
+              const originalText = "Hello tokenizer test!";
+              const tokens = await runtime.useModel(
+                ModelType.TEXT_TOKENIZER_ENCODE,
+                {
+                  text: originalText,
+                }
+              );
 
               // Then decode it back
-              const decodedText = await runtime.useModel(ModelType.TEXT_TOKENIZER_DECODE, {
-                tokens,
-              });
-              logger.info('Round trip tokenization:', {
+              const decodedText = await runtime.useModel(
+                ModelType.TEXT_TOKENIZER_DECODE,
+                {
+                  tokens,
+                }
+              );
+              logger.info("Round trip tokenization:", {
                 original: originalText,
                 decoded: decodedText,
               });
 
-              if (typeof decodedText !== 'string') {
-                throw new Error('Decoded output is not a string');
+              if (typeof decodedText !== "string") {
+                throw new Error("Decoded output is not a string");
               }
 
-              logger.success('TEXT_TOKENIZER_DECODE test completed successfully');
+              logger.success(
+                "TEXT_TOKENIZER_DECODE test completed successfully"
+              );
             } catch (error) {
-              logger.error('TEXT_TOKENIZER_DECODE test failed:', {
+              logger.error("TEXT_TOKENIZER_DECODE test failed:", {
                 error: error instanceof Error ? error.message : String(error),
                 stack: error instanceof Error ? error.stack : undefined,
               });
@@ -1478,32 +1600,38 @@ export const localAiPlugin: Plugin = {
           },
         },
         {
-          name: 'local_ai_test_image_description',
+          name: "local_ai_test_image_description",
           fn: async (runtime) => {
             try {
-              logger.info('Starting IMAGE_DESCRIPTION test');
+              logger.info("Starting IMAGE_DESCRIPTION test");
 
               const imageUrl =
-                'https://raw.githubusercontent.com/microsoft/FLAML/main/website/static/img/flaml.png';
-              const result = await runtime.useModel(ModelType.IMAGE_DESCRIPTION, imageUrl);
+                "https://raw.githubusercontent.com/microsoft/FLAML/main/website/static/img/flaml.png";
+              const result = await runtime.useModel(
+                ModelType.IMAGE_DESCRIPTION,
+                imageUrl
+              );
 
-              logger.info('Image description result:', result);
+              logger.info("Image description result:", result);
 
-              if (!result || typeof result !== 'object') {
-                throw new Error('Invalid response format');
+              if (!result || typeof result !== "object") {
+                throw new Error("Invalid response format");
               }
 
               if (!result.title || !result.description) {
-                throw new Error('Missing title or description in response');
+                throw new Error("Missing title or description in response");
               }
 
-              if (typeof result.title !== 'string' || typeof result.description !== 'string') {
-                throw new Error('Title or description is not a string');
+              if (
+                typeof result.title !== "string" ||
+                typeof result.description !== "string"
+              ) {
+                throw new Error("Title or description is not a string");
               }
 
-              logger.success('IMAGE_DESCRIPTION test completed successfully');
+              logger.success("IMAGE_DESCRIPTION test completed successfully");
             } catch (error) {
-              logger.error('IMAGE_DESCRIPTION test failed:', {
+              logger.error("IMAGE_DESCRIPTION test failed:", {
                 error: error instanceof Error ? error.message : String(error),
                 stack: error instanceof Error ? error.stack : undefined,
               });
@@ -1512,10 +1640,10 @@ export const localAiPlugin: Plugin = {
           },
         },
         {
-          name: 'local_ai_test_transcription',
+          name: "local_ai_test_transcription",
           fn: async (runtime) => {
             try {
-              logger.info('Starting TRANSCRIPTION test');
+              logger.info("Starting TRANSCRIPTION test");
 
               // Create a simple audio buffer for testing
               const audioData = new Uint8Array([
@@ -1538,16 +1666,19 @@ export const localAiPlugin: Plugin = {
               ]);
               const audioBuffer = Buffer.from(audioData);
 
-              const transcription = await runtime.useModel(ModelType.TRANSCRIPTION, audioBuffer);
-              logger.info('Transcription result:', transcription);
+              const transcription = await runtime.useModel(
+                ModelType.TRANSCRIPTION,
+                audioBuffer
+              );
+              logger.info("Transcription result:", transcription);
 
-              if (typeof transcription !== 'string') {
-                throw new Error('Transcription result is not a string');
+              if (typeof transcription !== "string") {
+                throw new Error("Transcription result is not a string");
               }
 
-              logger.success('TRANSCRIPTION test completed successfully');
+              logger.success("TRANSCRIPTION test completed successfully");
             } catch (error) {
-              logger.error('TRANSCRIPTION test failed:', {
+              logger.error("TRANSCRIPTION test failed:", {
                 error: error instanceof Error ? error.message : String(error),
                 stack: error instanceof Error ? error.stack : undefined,
               });
@@ -1556,38 +1687,41 @@ export const localAiPlugin: Plugin = {
           },
         },
         {
-          name: 'local_ai_test_text_to_speech',
+          name: "local_ai_test_text_to_speech",
           fn: async (runtime) => {
             try {
-              logger.info('Starting TEXT_TO_SPEECH test');
+              logger.info("Starting TEXT_TO_SPEECH test");
 
-              const testText = 'This is a test of the text to speech system.';
-              const audioStream = await runtime.useModel(ModelType.TEXT_TO_SPEECH, testText);
+              const testText = "This is a test of the text to speech system.";
+              const audioStream = await runtime.useModel(
+                ModelType.TEXT_TO_SPEECH,
+                testText
+              );
 
               if (!(audioStream instanceof Readable)) {
-                throw new Error('TTS output is not a readable stream');
+                throw new Error("TTS output is not a readable stream");
               }
 
               // Test stream readability
               let dataReceived = false;
-              audioStream.on('data', () => {
+              audioStream.on("data", () => {
                 dataReceived = true;
               });
 
               await new Promise((resolve, reject) => {
-                audioStream.on('end', () => {
+                audioStream.on("end", () => {
                   if (!dataReceived) {
-                    reject(new Error('No audio data received from stream'));
+                    reject(new Error("No audio data received from stream"));
                   } else {
                     resolve(true);
                   }
                 });
-                audioStream.on('error', reject);
+                audioStream.on("error", reject);
               });
 
-              logger.success('TEXT_TO_SPEECH test completed successfully');
+              logger.success("TEXT_TO_SPEECH test completed successfully");
             } catch (error) {
-              logger.error('TEXT_TO_SPEECH test failed:', {
+              logger.error("TEXT_TO_SPEECH test failed:", {
                 error: error instanceof Error ? error.message : String(error),
                 stack: error instanceof Error ? error.stack : undefined,
               });
