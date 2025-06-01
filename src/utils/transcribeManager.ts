@@ -3,9 +3,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { logger } from '@elizaos/core';
-import { nodewhisper } from 'nodejs-whisper';
 
 const execAsync = promisify(exec);
+
+// Lazy load whisper-node to avoid ESM/CommonJS issues
+let whisperModule: any = null;
+async function getWhisper() {
+  if (!whisperModule) {
+    // Dynamic import for CommonJS module
+    const module = await import('whisper-node');
+    // The module exports an object with a whisper property
+    whisperModule = (module as any).whisper;
+  }
+  return whisperModule;
+}
 
 /**
  * Interface representing the result of a transcription process.
@@ -318,7 +329,16 @@ export class TranscribeManager {
     }
 
     try {
-      const tempInputFile = path.join(this.cacheDir, `temp_input_${Date.now()}`);
+      // Check if the buffer is already a WAV file
+      const isWav =
+        audioBuffer.length > 4 &&
+        audioBuffer.toString('ascii', 0, 4) === 'RIFF' &&
+        audioBuffer.length > 12 &&
+        audioBuffer.toString('ascii', 8, 12) === 'WAVE';
+
+      // Use appropriate extension based on format detection
+      const extension = isWav ? '.wav' : '';
+      const tempInputFile = path.join(this.cacheDir, `temp_input_${Date.now()}${extension}`);
       const tempWavFile = path.join(this.cacheDir, `temp_${Date.now()}.wav`);
 
       // logger.info("Creating temporary files", {
@@ -335,6 +355,31 @@ export class TranscribeManager {
       //   size: audioBuffer.length,
       //   timestamp: new Date().toISOString()
       // });
+
+      // If already WAV with correct format, skip conversion
+      if (isWav) {
+        // Check if it's already in the correct format (16kHz, mono, 16-bit)
+        try {
+          const { stdout } = await execAsync(
+            `ffprobe -v error -show_entries stream=sample_rate,channels,bits_per_raw_sample -of json "${tempInputFile}"`
+          );
+          const probeResult = JSON.parse(stdout);
+          const stream = probeResult.streams?.[0];
+
+          if (
+            stream?.sample_rate === '16000' &&
+            stream?.channels === 1 &&
+            (stream?.bits_per_raw_sample === 16 || stream?.bits_per_raw_sample === undefined)
+          ) {
+            // Already in correct format, just rename
+            fs.renameSync(tempInputFile, tempWavFile);
+            return tempWavFile;
+          }
+        } catch (probeError) {
+          // If probe fails, continue with conversion
+          logger.debug('FFprobe failed, continuing with conversion:', probeError);
+        }
+      }
 
       // Convert to WAV format
       await this.convertToWav(tempInputFile, tempWavFile);
@@ -385,33 +430,34 @@ export class TranscribeManager {
 
       logger.info('Starting transcription with whisper...');
 
-      // Save original stdout and stderr write functions
-      const originalStdoutWrite = process.stdout.write;
-      const originalStderrWrite = process.stderr.write;
-
-      // Create a no-op function to suppress output
-      const noopWrite = () => true;
-
-      // Redirect stdout and stderr to suppress whisper output
-      process.stdout.write = noopWrite;
-      process.stderr.write = noopWrite;
-
-      let output: string;
+      let segments;
       try {
-        // Transcribe using whisper with output suppressed
-        output = await nodewhisper(wavFile, {
-          modelName: 'base.en',
-          autoDownloadModelName: 'base.en',
-          verbose: false,
+        // Get the whisper function
+        const whisper = await getWhisper();
+
+        // Transcribe using whisper-node
+        segments = await whisper(wavFile, {
+          modelName: 'tiny',
+          modelPath: path.join(this.cacheDir, 'models'), // Specify where to store models
           whisperOptions: {
-            outputInText: true,
             language: 'en',
+            word_timestamps: false, // We don't need word-level timestamps
           },
         });
-      } finally {
-        // Restore original stdout and stderr
-        process.stdout.write = originalStdoutWrite;
-        process.stderr.write = originalStderrWrite;
+      } catch (whisperError) {
+        // Check if it's a model download issue
+        const errorMessage =
+          whisperError instanceof Error ? whisperError.message : String(whisperError);
+        if (errorMessage.includes('not found') || errorMessage.includes('download')) {
+          logger.error('Whisper model not found. Please run: npx whisper-node download');
+          throw new Error(
+            'Whisper model not found. Please install it with: npx whisper-node download'
+          );
+        }
+
+        // For other errors, log and rethrow
+        logger.error('Whisper transcription error:', whisperError);
+        throw whisperError;
       }
 
       // Clean up temporary WAV file
@@ -420,19 +466,28 @@ export class TranscribeManager {
         logger.info('Temporary WAV file cleaned up');
       }
 
-      // Extract just the text content without timestamps
-      const cleanText = output
-        .split('\n')
-        .map((line) => {
-          // Remove timestamps if present [00:00:00.000 --> 00:00:00.000]
-          const textMatch = line.match(/](.+)$/);
-          return textMatch ? textMatch[1].trim() : line.trim();
-        })
-        .filter((line) => line) // Remove empty lines
+      // Check if segments is valid
+      if (!segments || !Array.isArray(segments)) {
+        logger.warn('Whisper returned no segments (likely silence or very short audio)');
+        // Return empty transcription for silent/empty audio
+        return { text: '' };
+      }
+
+      // Handle empty segments array
+      if (segments.length === 0) {
+        logger.warn('No speech detected in audio');
+        return { text: '' };
+      }
+
+      // Combine all segments into a single text
+      const cleanText = segments
+        .map((segment: any) => segment.speech?.trim() || '')
+        .filter((text: string) => text) // Remove empty segments
         .join(' ');
 
       logger.success('Transcription complete:', {
         textLength: cleanText.length,
+        segmentCount: segments.length,
         timestamp: new Date().toISOString(),
       });
 

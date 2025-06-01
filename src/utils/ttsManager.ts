@@ -4,10 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fetch } from 'undici';
 import { MODEL_SPECS } from '../types';
-import { Buffer } from 'buffer';
-import pkg from 'stream-browserify';
-
-const { PassThrough, Readable } = pkg;
+import { PassThrough, Readable } from 'node:stream';
 
 // Audio Utils
 
@@ -45,7 +42,7 @@ function getWavHeader(
 /**
  * Prepends a WAV header to a readable stream of audio data.
  *
- * @param {InstanceType<typeof Readable>} readable - The readable stream containing the audio data.
+ * @param {Readable} readable - The readable stream containing the audio data.
  * @param {number} audioLength - The length of the audio data in bytes.
  * @param {number} sampleRate - The sample rate of the audio data.
  * @param {number} [channelCount=1] - The number of channels in the audio data (default is 1).
@@ -53,12 +50,12 @@ function getWavHeader(
  * @returns {PassThrough} A new pass-through stream with the WAV header prepended to the audio data.
  */
 function prependWavHeader(
-  readable: InstanceType<typeof Readable>,
+  readable: Readable,
   audioLength: number,
   sampleRate: number,
   channelCount = 1,
   bitsPerSample = 16
-): InstanceType<typeof PassThrough> {
+): PassThrough {
   const wavHeader = getWavHeader(audioLength, sampleRate, channelCount, bitsPerSample);
   let pushedHeader = false;
   const passThrough = new PassThrough();
@@ -201,7 +198,7 @@ export class TTSManager {
    * @returns {Promise<Readable>} A promise that resolves to a Readable stream containing the generated WAV audio data.
    * @throws {Error} If the TTS model is not initialized or if generation fails.
    */
-  public async generateSpeech(text: string): Promise<InstanceType<typeof Readable>> {
+  public async generateSpeech(text: string): Promise<Readable> {
     try {
       await this.initialize();
 

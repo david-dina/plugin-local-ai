@@ -1485,8 +1485,9 @@ export const localAiPlugin: Plugin = {
             try {
               logger.info('Starting IMAGE_DESCRIPTION test');
 
+              // Use a more stable test image URL
               const imageUrl =
-                'https://raw.githubusercontent.com/microsoft/FLAML/main/website/static/img/flaml.png';
+                'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Cat03.jpg/320px-Cat03.jpg';
               const result = await runtime.useModel(ModelType.IMAGE_DESCRIPTION, imageUrl);
 
               logger.info('Image description result:', result);
@@ -1519,33 +1520,53 @@ export const localAiPlugin: Plugin = {
             try {
               logger.info('Starting TRANSCRIPTION test');
 
-              // Create a simple audio buffer for testing
-              const audioData = new Uint8Array([
-                0x52,
-                0x49,
-                0x46,
-                0x46, // "RIFF"
-                0x24,
-                0x00,
-                0x00,
-                0x00, // Chunk size
-                0x57,
-                0x41,
-                0x56,
-                0x45, // "WAVE"
-                0x66,
-                0x6d,
-                0x74,
-                0x20, // "fmt "
-              ]);
-              const audioBuffer = Buffer.from(audioData);
+              // Create a proper WAV file header and minimal audio data
+              // WAV file format: RIFF header + fmt chunk + data chunk
+              const channels = 1;
+              const sampleRate = 16000;
+              const bitsPerSample = 16;
+              const duration = 0.5; // 500ms for better transcription
+              const numSamples = Math.floor(sampleRate * duration);
+              const dataSize = numSamples * channels * (bitsPerSample / 8);
 
-              const transcription = await runtime.useModel(ModelType.TRANSCRIPTION, audioBuffer);
+              // Create the WAV header
+              const buffer = Buffer.alloc(44 + dataSize);
+
+              // RIFF header
+              buffer.write('RIFF', 0);
+              buffer.writeUInt32LE(36 + dataSize, 4); // File size - 8
+              buffer.write('WAVE', 8);
+
+              // fmt chunk
+              buffer.write('fmt ', 12);
+              buffer.writeUInt32LE(16, 16); // fmt chunk size
+              buffer.writeUInt16LE(1, 20); // Audio format (1 = PCM)
+              buffer.writeUInt16LE(channels, 22); // Number of channels
+              buffer.writeUInt32LE(sampleRate, 24); // Sample rate
+              buffer.writeUInt32LE(sampleRate * channels * (bitsPerSample / 8), 28); // Byte rate
+              buffer.writeUInt16LE(channels * (bitsPerSample / 8), 32); // Block align
+              buffer.writeUInt16LE(bitsPerSample, 34); // Bits per sample
+
+              // data chunk
+              buffer.write('data', 36);
+              buffer.writeUInt32LE(dataSize, 40); // Data size
+
+              // Generate a simple sine wave tone (440Hz) instead of silence
+              const frequency = 440; // A4 note
+              for (let i = 0; i < numSamples; i++) {
+                const sample = Math.sin((2 * Math.PI * frequency * i) / sampleRate) * 0.1 * 32767;
+                buffer.writeInt16LE(Math.floor(sample), 44 + i * 2);
+              }
+
+              const transcription = await runtime.useModel(ModelType.TRANSCRIPTION, buffer);
               logger.info('Transcription result:', transcription);
 
               if (typeof transcription !== 'string') {
                 throw new Error('Transcription result is not a string');
               }
+
+              // Accept empty string as valid result (for non-speech audio)
+              logger.info('Transcription completed (may be empty for non-speech audio)');
 
               logger.success('TRANSCRIPTION test completed successfully');
             } catch (error) {
