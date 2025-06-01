@@ -26,6 +26,7 @@
     "@huggingface/transformers": "^3.5.1",
     "node-llama-cpp": "3.8.1",
     "nodejs-whisper": "0.2.6",
+    "stream-browserify": "^3.0.0",
     "tsup": "8.5.0",
     "undici": "^7.10.0",
     "uuid": "11.1.0",
