@@ -1,6 +1,6 @@
 {
   "name": "@elizaos/plugin-local-ai",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -47,46 +47,7 @@
   },
   "agentConfig": {
     "pluginType": "elizaos:plugin:1.0.0",
-    "pluginParameters": {
-      "MODELS_DIR": {
-        "type": "string",
-        "description": "Specifies a custom directory for storing model GGUF files",
-        "required": false,
-        "default": "~/.eliza/models"
-      },
-      "CACHE_DIR": {
-        "type": "string",
-        "description": "Specifies a custom directory for caching components like tokenizers",
-        "required": false,
-        "default": "~/.eliza/cache"
-      },
-      "LOCAL_SMALL_MODEL": {
-        "type": "string",
-        "description": "Filename for the small text generation model located in the models directory",
-        "required": false
-      },
-      "LOCAL_LARGE_MODEL": {
-        "type": "string",
-        "description": "Filename for the large text generation model located in the models directory",
-        "required": false
-      },
-      "LOCAL_EMBEDDING_MODEL": {
-        "type": "string",
-        "description": "Filename for the text embedding model located in the models directory",
-        "required": false
-      },
-      "LOCAL_EMBEDDING_DIMENSIONS": {
-        "type": "number",
-        "description": "Fallback dimension size for text embeddings if generation fails",
-        "required": false,
-        "default": "model's native dimension size (e.g., 384)"
-      },
-      "CUDA_VISIBLE_DEVICES": {
-        "type": "string",
-        "description": "Indicates availability of CUDA-enabled GPU devices; if set, the application will configure the vision model to run on GPU with fp16 precision.",
-        "required": false
-      }
-    }
+    "pluginParameters": {}
   },
   "gitHead": "646c632924826e2b75c2304a75ee56959fe4a460",
   "devDependencies": {
