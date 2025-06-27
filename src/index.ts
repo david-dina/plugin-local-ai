@@ -927,18 +927,105 @@ export const localAiPlugin: Plugin = {
   name: 'local-ai',
   description: 'Local AI plugin using LLaMA models',
 
-  async init() {
+  async init(_config: any, runtime: IAgentRuntime) {
+    logger.info('🚀 Initializing Local AI plugin...');
+    
     try {
-      logger.debug('Initializing local-ai plugin environment...');
-      // Call initializeEnvironment (now public)
+      // Initialize environment and validate configuration
       await localAIManager.initializeEnvironment();
-      logger.success('Local AI plugin configuration validated and initialized');
+      const config = validateConfig();
+      
+      // Check for critical configuration
+      if (!config.LOCAL_SMALL_MODEL || !config.LOCAL_LARGE_MODEL || !config.LOCAL_EMBEDDING_MODEL) {
+        logger.warn('⚠️ Local AI plugin: Model configuration is incomplete');
+        logger.warn('Please ensure the following environment variables are set:');
+        logger.warn('- LOCAL_SMALL_MODEL: Path to small language model file');
+        logger.warn('- LOCAL_LARGE_MODEL: Path to large language model file');
+        logger.warn('- LOCAL_EMBEDDING_MODEL: Path to embedding model file');
+        logger.warn('Example: LOCAL_SMALL_MODEL=llama-3.2-1b-instruct-q8_0.gguf');
+      }
+      
+      // Check if models directory is accessible
+      const modelsDir = config.MODELS_DIR || path.join(os.homedir(), '.eliza', 'models');
+      if (!fs.existsSync(modelsDir)) {
+        logger.warn(`⚠️ Models directory does not exist: ${modelsDir}`);
+        logger.warn('The directory will be created, but you need to download model files');
+        logger.warn('Visit https://huggingface.co/models to download compatible GGUF models');
+      }
+      
+      // Perform a basic initialization test
+      logger.info('🔍 Testing Local AI initialization...');
+      
+      try {
+        // Check platform capabilities
+        await localAIManager.checkPlatformCapabilities();
+        
+        // Test if we can get the llama instance
+        const llamaInstance = await getLlama();
+        if (llamaInstance) {
+          logger.success('✅ Local AI: llama.cpp library loaded successfully');
+        } else {
+          throw new Error('Failed to load llama.cpp library');
+        }
+        
+        // Check if at least one model file exists
+        const smallModelPath = path.join(modelsDir, config.LOCAL_SMALL_MODEL);
+        const largeModelPath = path.join(modelsDir, config.LOCAL_LARGE_MODEL);
+        const embeddingModelPath = path.join(modelsDir, config.LOCAL_EMBEDDING_MODEL);
+        
+        const modelsExist = {
+          small: fs.existsSync(smallModelPath),
+          large: fs.existsSync(largeModelPath),
+          embedding: fs.existsSync(embeddingModelPath)
+        };
+        
+        if (!modelsExist.small && !modelsExist.large && !modelsExist.embedding) {
+          logger.warn('⚠️ No model files found in models directory');
+          logger.warn('Models will be downloaded on first use, which may take time');
+          logger.warn('To pre-download models, run the plugin and it will fetch them automatically');
+        } else {
+          logger.info('📦 Found model files:', {
+            small: modelsExist.small ? '✓' : '✗',
+            large: modelsExist.large ? '✓' : '✗',
+            embedding: modelsExist.embedding ? '✓' : '✗'
+          });
+        }
+        
+        logger.success('✅ Local AI plugin initialized successfully');
+        logger.info('💡 Models will be loaded on-demand when first used');
+        
+      } catch (testError) {
+        logger.error('❌ Local AI initialization test failed:', testError);
+        logger.warn('The plugin may not function correctly');
+        logger.warn('Please check:');
+        logger.warn('1. Your system has sufficient memory (8GB+ recommended)');
+        logger.warn('2. C++ build tools are installed (for node-llama-cpp)');
+        logger.warn('3. Your CPU supports the required instruction sets');
+        // Don't throw here - allow the plugin to load even if the test fails
+      }
+      
     } catch (error) {
-      logger.error('Plugin initialization failed:', {
+      logger.error('❌ Failed to initialize Local AI plugin:', {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });
-      throw error;
+      
+      // Provide helpful guidance based on common errors
+      if (error instanceof Error) {
+        if (error.message.includes('Cannot find module')) {
+          logger.error('📚 Missing dependencies detected');
+          logger.error('Please run: npm install or bun install');
+        } else if (error.message.includes('node-llama-cpp')) {
+          logger.error('🔧 node-llama-cpp build issue detected');
+          logger.error('Please ensure C++ build tools are installed:');
+          logger.error('- Windows: Install Visual Studio Build Tools');
+          logger.error('- macOS: Install Xcode Command Line Tools');
+          logger.error('- Linux: Install build-essential package');
+        }
+      }
+      
+      // Don't throw - allow the system to continue without this plugin
+      logger.warn('⚠️ Local AI plugin will not be available');
     }
   },
   models: {
