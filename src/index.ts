@@ -548,7 +548,7 @@ class LocalAIManager {
       // Call LlamaContext.dispose() to free GPU memory.
       if(this.ctx){
         this.ctx.dispose();
-        this.ctx = null;
+        this.ctx = undefined;
       }
       await this.initializeEnvironment(); // Ensure environment is initialized
       logger.info('Generating text with model:', params.modelType);
