@@ -8,7 +8,7 @@ export default defineConfig({
   clean: true,
   format: ['esm'],
   dts: true,
-  noExternal: ['eventemitter3', 'ipull'], // Bundle problematic packages
+  noExternal: ['eventemitter3', 'ipull', '@huggingface/transformers'], // Bundle problematic packages
   external: [
     'dotenv', // Externalize dotenv to prevent bundling
     'fs', // Externalize fs to use Node.js built-in module
