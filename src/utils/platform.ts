@@ -216,35 +216,62 @@ export class PlatformManager {
    * @returns {Promise<SystemGPU | null>} A promise that resolves with the detected GPU information or null if detection fails.
    */
   private async detectWindowsGPU(): Promise<SystemGPU | null> {
+    let gpuName: string | null = null;
+
     try {
       const { stdout } = await execAsync('wmic path win32_VideoController get name');
-      const gpuName = stdout.split('\n')[1].trim();
-
-      // Check for NVIDIA GPU
-      if (gpuName.toLowerCase().includes('nvidia')) {
-        const { stdout: nvidiaInfo } = await execAsync(
-          'nvidia-smi --query-gpu=name,memory.total --format=csv,noheader'
-        );
-        const [name, memoryStr] = nvidiaInfo.split(',').map((s) => s.trim());
-        const memory = Number.parseInt(memoryStr);
-
-        return {
-          name,
-          memory,
-          type: 'cuda',
-          version: await this.getNvidiaDriverVersion(),
-        };
+      gpuName = stdout.split('\n')[1]?.trim();
+      if (gpuName) {
+        logger.debug('GPU detected via WMIC:', gpuName);
       }
+    } catch (wmicError) {
+      logger.debug('WMIC failed, trying PowerShell fallback', { wmicError });
+    }
 
-      // Default to DirectML for other GPUs
-      return {
-        name: gpuName,
-        type: 'directml',
-      };
-    } catch (error) {
-      logger.error('Windows GPU detection failed', { error });
+    // If WMIC failed, try PowerShell
+    if (!gpuName) {
+      try {
+        const { stdout } = await execAsync('powershell -Command "Get-CimInstance -ClassName Win32_VideoController | Select-Object -Property Name | ConvertTo-Json"');
+        
+        // Parse the JSON output from PowerShell
+        const gpuData = JSON.parse(stdout);
+        gpuName = Array.isArray(gpuData) ? gpuData[0]?.Name : gpuData?.Name;
+        
+        if (gpuName) {
+          logger.debug('GPU detected via PowerShell:', gpuName);
+        }
+      } catch (powershellError) {
+        logger.error('Both WMIC and PowerShell GPU detection failed', { powershellError });
+        return null;
+      }
+    }
+
+    if (!gpuName) {
+      logger.warn('No GPU detected via WMIC or PowerShell');
       return null;
     }
+
+    // Check for NVIDIA GPU
+    if (gpuName.toLowerCase().includes('nvidia')) {
+      const { stdout: nvidiaInfo } = await execAsync(
+        'nvidia-smi --query-gpu=name,memory.total --format=csv,noheader'
+      );
+      const [name, memoryStr] = nvidiaInfo.split(',').map((s: string) => s.trim());
+      const memory = Number.parseInt(memoryStr);
+
+      return {
+        name,
+        memory,
+        type: 'cuda',
+        version: await this.getNvidiaDriverVersion(),
+      };
+    }
+
+    // Default to DirectML for other GPUs
+    return {
+      name: gpuName,
+      type: 'directml',
+    };
   }
 
   /**
